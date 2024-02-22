@@ -1,0 +1,77 @@
+name: Build and Publish Brainy Web Images
+on:
+  workflow_dispatch:
+    secrets:
+      BRAINY_WEB_REPOSITORY:
+        required: true
+      BRAINY_WEB_REPOSITORY_SSH_KEY:
+        required: true
+      DOCKERHUB_USERNAME:
+        required: true
+      DOCKERHUB_TOKEN:
+        required: true
+    inputs:
+      tag:
+        description: Tag name to build and publish
+        type: string
+        required: true
+    
+jobs:
+
+  tagging:
+    name: Create Tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Push Git Tag
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git tag -am "Tagging for release v${{ inputs.tag }}" v${{ inputs.tag }}
+          git push origin v${{ inputs.tag }}
+
+  build-and-publish:
+    name: Build and publish
+    needs: [tagging]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up ssh agent
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H bitbucket.org >> ~/.ssh/known_hosts
+      - name: Checkout code tag ${{ inputs.tag }}
+        shell: bash
+        run: |
+          eval $(ssh-agent -s)
+          echo "${{ secrets.BRAINY_WEB_REPOSITORY_SSH_KEY }}" |  ssh-add -
+          git clone ${{ secrets.BRAINY_WEB_REPOSITORY }} .
+          git checkout ${{ inputs.tag }}
+          ls -al
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Debugging docker
+        shell: bash
+        run: |
+          docker buildx ls; true
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./
+          file: Dockerfile
+          platforms: linux/amd64, linux/arm64
+          push: true
+          tags: sjexpos/brainy-web-jq:${{ inputs.tag }}
