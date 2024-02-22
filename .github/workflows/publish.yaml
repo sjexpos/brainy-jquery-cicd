@@ -41,13 +41,13 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -H bitbucket.org >> ~/.ssh/known_hosts
-      - name: Checkout code tag ${{ inputs.tag }}
+      - name: Checkout code tag v${{ inputs.tag }}
         shell: bash
         run: |
           eval $(ssh-agent -s)
           echo "${{ secrets.BRAINY_WEB_REPOSITORY_SSH_KEY }}" |  ssh-add -
           git clone ${{ secrets.BRAINY_WEB_REPOSITORY }} .
-          git checkout ${{ inputs.tag }}
+          git checkout v${{ inputs.tag }}
           ls -al
 
       - name: Set up QEMU
